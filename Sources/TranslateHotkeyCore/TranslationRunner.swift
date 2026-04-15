@@ -8,6 +8,38 @@ public enum TranslationRunOutcome: Sendable {
     case abortedConcurrent
 }
 
+private enum TranslationPrepareOutcome: Sendable {
+    case success(apiKey: String, masked: String, pairs: [(token: String, original: String)])
+    case failure(String)
+}
+
+extension TranslationRunner {
+    /// Keychain, pasteboard read, and reference masking can block; run off the main actor so the UI stays responsive.
+    nonisolated private static func prepareOffMain() async -> TranslationPrepareOutcome {
+        await withCheckedContinuation { (continuation: CheckedContinuation<TranslationPrepareOutcome, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let outcome: TranslationPrepareOutcome
+                if let apiKey = KeychainStore.loadAPIKey(), !apiKey.isEmpty {
+                    let pb = NSPasteboard.general
+                    if let selected = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !selected.isEmpty
+                    {
+                        let (masked, pairs) = ReferencePlaceholderCodec.maskReferences(in: selected)
+                        outcome = .success(apiKey: apiKey, masked: masked, pairs: pairs)
+                    } else {
+                        outcome = .failure("Clipboard is empty. Copy text first, then press ⌃⌥⌘T.")
+                    }
+                } else {
+                    outcome = .failure("Add your xAI API key in Settings (menu bar icon → Settings).")
+                }
+                // Do not resume via `DispatchQueue.main.async`: a time-driven MenuBarExtra label can starve the main
+                // queue so the continuation never runs (deadlock + pegged CPU).
+                continuation.resume(returning: outcome)
+            }
+        }
+    }
+}
+
 @MainActor
 public final class TranslationRunner {
     private var inFlight = false
@@ -31,18 +63,20 @@ public final class TranslationRunner {
         inFlight = true
         defer { inFlight = false }
 
-        guard let apiKey = KeychainStore.loadAPIKey(), !apiKey.isEmpty else {
-            return .failed("Add your xAI API key in Settings (menu bar icon → Settings).")
+        let prepared = await Self.prepareOffMain()
+        let apiKey: String
+        let masked: String
+        let pairs: [(token: String, original: String)]
+        switch prepared {
+        case .failure(let message):
+            return .failed(message)
+        case .success(let k, let m, let p):
+            apiKey = k
+            masked = m
+            pairs = p
         }
 
         let pb = NSPasteboard.general
-        guard let selected = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !selected.isEmpty
-        else {
-            return .failed("Clipboard is empty. Copy text first, then press ⌃⌥⌘T.")
-        }
-
-        let (masked, pairs) = ReferencePlaceholderCodec.maskReferences(in: selected)
         let client = GrokClient(apiKey: apiKey, model: UserSettings.selectedModel, session: urlSession)
         let system = UserSettings.systemPrompt
 

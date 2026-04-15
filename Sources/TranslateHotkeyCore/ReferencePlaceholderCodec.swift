@@ -67,26 +67,54 @@ public enum ReferencePlaceholderCodec {
         }
     }
 
+    /// Same boundaries as the old regex `[^\s,\]}\)>]+` — linear-time scan (avoids catastrophic backtracking on `@token` without `/`).
+    private static func isPathTerminator(_ c: Character) -> Bool {
+        if c.isWhitespace { return true }
+        switch c {
+        case ",", "]", "}", ")", ">": return true
+        default: return false
+        }
+    }
+
     private static func collectCandidates(in text: String) -> [Span] {
         var spans: [Span] = []
-        let nsText = text as NSString
-        let full = NSRange(location: 0, length: nsText.length)
-
-        // 1) Plans / absolute: @/Users/.../file.md
-        // 2) Repo relative: @ai_context/ai_antidote.md (must contain `/` after `@`, not `@/`).
-        let patterns: [(String, NSRegularExpression.Options)] = [
-            (#"@/[^\s,\]}\)>]+"#, []),
-            (#"@(?![/])(?:[^\s,\]}\)>]+/)+[^\s,\]}\)>]+"#, [])
-        ]
-
-        for (pattern, opts) in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: opts) else { continue }
-            regex.enumerateMatches(in: text, options: [], range: full) { match, _, _ in
-                guard let match, match.range.length > 0 else { return }
-                guard let range = Range(match.range, in: text) else { return }
-                let slice = String(text[range])
-                if !slice.isEmpty { spans.append(Span(range: range, original: slice)) }
+        var i = text.startIndex
+        while i < text.endIndex {
+            if text[i] != "@" {
+                text.formIndex(after: &i)
+                continue
             }
+            let afterAt = text.index(after: i)
+            if afterAt >= text.endIndex {
+                text.formIndex(after: &i)
+                continue
+            }
+            // 1) Plans / absolute: @/Users/.../file.md
+            if text[afterAt] == "/" {
+                let start = i
+                var j = afterAt
+                while j < text.endIndex, !isPathTerminator(text[j]) {
+                    text.formIndex(after: &j)
+                }
+                if j > start {
+                    let range = start..<j
+                    spans.append(Span(range: range, original: String(text[range])))
+                }
+                i = j
+                continue
+            }
+            // 2) Repo relative: @ai_context/file.md — must contain `/` before terminator (not `@/`).
+            var j = afterAt
+            var sawSlash = false
+            while j < text.endIndex, !isPathTerminator(text[j]) {
+                if text[j] == "/" { sawSlash = true }
+                text.formIndex(after: &j)
+            }
+            if sawSlash, j > i {
+                let range = i..<j
+                spans.append(Span(range: range, original: String(text[range])))
+            }
+            i = j
         }
         return spans
     }
