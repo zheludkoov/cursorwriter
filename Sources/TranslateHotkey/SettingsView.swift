@@ -55,6 +55,9 @@ struct SettingsView: View {
         .onAppear {
             NSApplication.shared.activate(ignoringOtherApps: true)
             apiKeyField = KeychainStore.loadAPIKey() ?? ""
+            if !UserSettings.grokModels.contains(where: { $0.id == model }) {
+                model = UserSettings.grokModels[0].id
+            }
         }
     }
 
