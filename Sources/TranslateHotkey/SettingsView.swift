@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import TranslateHotkeyCore
 
@@ -52,6 +53,7 @@ struct SettingsView: View {
         .padding()
         .frame(minWidth: 520, minHeight: 420)
         .onAppear {
+            NSApplication.shared.activate(ignoringOtherApps: true)
             apiKeyField = KeychainStore.loadAPIKey() ?? ""
         }
     }
