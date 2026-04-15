@@ -19,6 +19,20 @@ If the clipboard has no string content, or the xAI API key is missing, the app s
 - The user’s **xAI API key** is stored in the **Keychain** and entered in **Settings**.
 - Settings also expose **editable system prompt** and a **Grok model picker** (e.g. latest vs fast preset).
 
+## App Sandbox and signing
+
+- **Sandbox** is enabled in `TranslateHotkey.entitlements` (`com.apple.security.app-sandbox`, plus `com.apple.security.network.client` for Grok HTTPS). Unsigned `swift run` builds do **not** load those entitlements; use a signed binary for real sandbox behavior.
+- **CLI signing:** from the repo root, run `./scripts/codesign-release.sh` (optional `CODESIGN_IDENTITY` for Developer ID). Defaults to ad-hoc `-` for local checks.
+- **Xcode:** set **Code Signing Entitlements** on the TranslateHotkey executable to `TranslateHotkey.entitlements` so archives match the script.
+
+### Upgrading from a non-sandbox build
+
+Users who previously ran an **unsigned** or **non-sandbox** build may need to **enter the xAI API key again** in Settings (Keychain items can be scoped differently once sandbox + signing apply). **UserDefaults** (system prompt, model) may also appear reset because preferences move into the app **container** instead of the global preferences domain.
+
+### Manual QA after a signed build
+
+Use a binary produced by `./scripts/codesign-release.sh` (or an equivalent Xcode-signed build). Confirm: outbound translation to Grok works; empty clipboard shows the expected error; API key save/load survives quit and relaunch; ⌃⌥⌘T fires when another app is frontmost; custom system prompt and model choice persist across relaunch.
+
 ## Notable implementation details
 
 - **Reference masking:** Before sending text to the model, **Cursor-style file references** in the clipboard (plain-text `@/absolute/...` and certain `@repo/path` forms) are replaced with opaque placeholders like `⟦REF_0001⟧`. The default system prompt instructs the model to preserve those tokens. After the reply, placeholders are **restored to the original paths** wherever they still appear. If the model drops some tokens, the clipboard still receives the partial result (remaining `⟦REF_####⟧` tokens are not rewritten), and the menu bar icon shows a **warning** instead of the success checkmark.
