@@ -1,14 +1,18 @@
 import AppKit
-import ApplicationServices
 import Foundation
 import OSLog
+
+public enum TranslationRunOutcome: Sendable {
+    case completed
+    case failed(String)
+    case abortedConcurrent
+}
 
 @MainActor
 public final class TranslationRunner {
     private var inFlight = false
 
-    public var onError: ((String) -> Void)?
-    public var onSuccess: (() -> Void)?
+    public var isTranslationInFlight: Bool { inFlight }
 
     private lazy var urlSession: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -19,41 +23,23 @@ public final class TranslationRunner {
 
     public init() {}
 
-    public static func promptAccessibilityIfNeeded() {
-        // String literal avoids Swift 6 concurrency warnings on `kAXTrustedCheckOptionPrompt`.
-        let options: [String: Any] = ["AXTrustedCheckOptionPrompt": true]
-        _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
-    }
-
-    public func run() async {
+    public func run() async -> TranslationRunOutcome {
         guard !inFlight else {
             AppLog.general.warning("Ignored hotkey re-entrancy while a translation is in flight.")
-            return
+            return .abortedConcurrent
         }
         inFlight = true
         defer { inFlight = false }
 
-        guard AXIsProcessTrusted() else {
-            Self.promptAccessibilityIfNeeded()
-            onError?("TranslateHotkey needs Accessibility permission (System Settings → Privacy & Security → Accessibility).")
-            return
-        }
-
         guard let apiKey = KeychainStore.loadAPIKey(), !apiKey.isEmpty else {
-            onError?("Add your xAI API key in Settings (menu bar icon → Settings).")
-            return
+            return .failed("Add your xAI API key in Settings (menu bar icon → Settings).")
         }
 
         let pb = NSPasteboard.general
-        let previous = pb.string(forType: .string)
-
-        SyntheticKeyEvents.copyChord()
-        SyntheticKeyEvents.sleepMilliseconds(200)
-
-        guard let selected = pb.string(forType: .string), !selected.isEmpty else {
-            restorePasteboard(pb, previous: previous)
-            onError?("No text was copied. Select text in the editor, then press ⌃⌥⌘T.")
-            return
+        guard let selected = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !selected.isEmpty
+        else {
+            return .failed("Clipboard is empty. Copy text first, then press ⌃⌥⌘T.")
         }
 
         let (masked, pairs) = ReferencePlaceholderCodec.maskReferences(in: selected)
@@ -76,14 +62,9 @@ public final class TranslationRunner {
 
             pb.clearContents()
             pb.setString(finalText, forType: .string)
-            SyntheticKeyEvents.sleepMilliseconds(50)
-            SyntheticKeyEvents.pasteChord()
-            SyntheticKeyEvents.sleepMilliseconds(150)
-            restorePasteboard(pb, previous: previous)
-            onSuccess?()
+            return .completed
         } catch {
-            restorePasteboard(pb, previous: previous)
-            onError?(error.localizedDescription)
+            return .failed(error.localizedDescription)
         }
     }
 
@@ -106,12 +87,5 @@ public final class TranslationRunner {
         """
         let repairSystem = "Restore every ⟦REF_####⟧ token exactly as listed. Output only the corrected full text."
         return try await client.chatCompletion(system: repairSystem, user: user)
-    }
-
-    private func restorePasteboard(_ pb: NSPasteboard, previous: String?) {
-        pb.clearContents()
-        if let previous {
-            pb.setString(previous, forType: .string)
-        }
     }
 }

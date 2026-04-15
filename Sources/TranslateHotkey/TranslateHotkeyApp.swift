@@ -11,9 +11,9 @@ struct TranslateHotkeyApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("Translate", systemImage: "character.book.closed") {
-            Button("Translate selection") {
-                Task { await appState.runner.run() }
+        MenuBarExtra {
+            Button("Translate clipboard") {
+                Task { await appState.translateClipboard() }
             }
             Divider()
             SettingsLink {
@@ -23,11 +23,28 @@ struct TranslateHotkeyApp: App {
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
+        } label: {
+            trayIcon
         }
         .menuBarExtraStyle(.menu)
 
         Settings {
             SettingsView()
+        }
+    }
+
+    @ViewBuilder
+    private var trayIcon: some View {
+        switch appState.trayPhase {
+        case .idle:
+            Image(systemName: "doc.on.clipboard")
+        case .working:
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .symbolEffect(.rotate, options: .repeating, isActive: true)
+        case .success:
+            Image(systemName: "checkmark.circle.fill")
+                .symbolRenderingMode(.multicolor)
+                .foregroundStyle(.green)
         }
     }
 }

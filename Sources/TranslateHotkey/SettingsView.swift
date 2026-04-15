@@ -43,6 +43,9 @@ struct SettingsView: View {
                     Text("⌃⌥⌘T")
                         .font(.system(.body, design: .monospaced))
                 }
+                Text("Copy text, press the shortcut to translate the clipboard, then paste where you need it.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
