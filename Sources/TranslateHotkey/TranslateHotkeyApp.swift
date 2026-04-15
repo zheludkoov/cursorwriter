@@ -39,8 +39,10 @@ struct TranslateHotkeyApp: App {
         case .idle:
             Image(systemName: "doc.on.clipboard")
         case .working:
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .symbolEffect(.rotate, options: .repeating, isActive: true)
+            TimelineView(.animation(minimumInterval: 0.05, paused: false)) { context in
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .rotationEffect(.degrees(context.date.timeIntervalSinceReferenceDate * 240))
+            }
         case .success:
             Image(systemName: "checkmark.circle.fill")
                 .symbolRenderingMode(.multicolor)
