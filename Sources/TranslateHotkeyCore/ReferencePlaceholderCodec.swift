@@ -14,8 +14,7 @@ public enum ReferencePlaceholderCodec {
 
     /// Masks Cursor `@` path references. Returns masked text and ordered (token, original) pairs for restoration.
     public static func maskReferences(in text: String) -> (masked: String, pairs: [(token: String, original: String)]) {
-        let candidates = collectCandidates(in: text)
-        let spans = nonOverlappingLongestFirst(candidates)
+        let spans = collectCandidates(in: text).sorted { $0.range.lowerBound < $1.range.lowerBound }
         guard !spans.isEmpty else { return (text, []) }
 
         var pairs: [(String, String)] = []
@@ -23,7 +22,7 @@ public enum ReferencePlaceholderCodec {
         var result = ""
         var cursor = text.startIndex
         var index = 1
-        for span in spans.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
+        for span in spans {
             if cursor < span.range.lowerBound {
                 result.append(contentsOf: text[cursor..<span.range.lowerBound])
             }
@@ -90,18 +89,5 @@ public enum ReferencePlaceholderCodec {
             }
         }
         return spans
-    }
-
-    private static func nonOverlappingLongestFirst(_ candidates: [Span]) -> [Span] {
-        let sorted = candidates.sorted { a, b in
-            if a.original.count != b.original.count { return a.original.count > b.original.count }
-            return a.range.lowerBound < b.range.lowerBound
-        }
-        var chosen: [Span] = []
-        for c in sorted {
-            if chosen.contains(where: { $0.range.overlaps(c.range) }) { continue }
-            chosen.append(c)
-        }
-        return chosen
     }
 }
