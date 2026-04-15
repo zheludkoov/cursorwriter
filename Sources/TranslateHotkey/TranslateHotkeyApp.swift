@@ -45,6 +45,10 @@ struct TranslateHotkeyApp: App {
             Image(systemName: "checkmark.circle.fill")
                 .symbolRenderingMode(.multicolor)
                 .foregroundStyle(.green)
+        case .successWithWarning:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .symbolRenderingMode(.multicolor)
+                .foregroundStyle(.yellow)
         }
     }
 }

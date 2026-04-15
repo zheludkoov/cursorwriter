@@ -21,6 +21,6 @@ If the clipboard has no string content, or the xAI API key is missing, the app s
 
 ## Notable implementation details
 
-- **Reference masking:** Before sending text to the model, **Cursor-style file references** in the clipboard (plain-text `@/absolute/...` and certain `@repo/path` forms) are replaced with opaque placeholders like `⟦REF_0001⟧`. The default system prompt instructs the model to preserve those tokens. After the reply, placeholders are **restored to the original paths**. If the model drops tokens, the app may perform a **second “repair”** completion to try to fix missing placeholders.
+- **Reference masking:** Before sending text to the model, **Cursor-style file references** in the clipboard (plain-text `@/absolute/...` and certain `@repo/path` forms) are replaced with opaque placeholders like `⟦REF_0001⟧`. The default system prompt instructs the model to preserve those tokens. After the reply, placeholders are **restored to the original paths** wherever they still appear. If the model drops some tokens, the clipboard still receives the partial result (remaining `⟦REF_####⟧` tokens are not rewritten), and the menu bar icon shows a **warning** instead of the success checkmark.
 - **Concurrency:** Re-entrant hotkey presses while a run is in flight are ignored.
 - **Defaults:** The bundled default system prompt targets **Russian → English** for technical writing, but the user can change this freely in Settings.

@@ -7,6 +7,8 @@ enum TrayPhase: Equatable {
     case idle
     case working
     case success
+    /// Completed but some reference placeholders were dropped by the model (clipboard still updated).
+    case successWithWarning
 }
 
 @MainActor
@@ -39,6 +41,9 @@ final class AppState: ObservableObject {
         switch outcome {
         case .completed:
             trayPhase = .success
+            scheduleSuccessReset()
+        case .completedWithMissingReferences:
+            trayPhase = .successWithWarning
             scheduleSuccessReset()
         case .failed(let message):
             trayPhase = .idle

@@ -45,8 +45,13 @@ public enum ReferencePlaceholderCodec {
             AppLog.codec.error("Missing placeholders: \(missing.joined(separator: ", "), privacy: .public)")
             throw CodecError.missingPlaceholders(missing)
         }
+        return restoreReplacingPresentOnly(translated: translated, pairs: pairs)
+    }
+
+    /// Replaces each placeholder that still appears in `translated`; tokens the model dropped are skipped (caller may warn the user).
+    public static func restoreReplacingPresentOnly(translated: String, pairs: [(token: String, original: String)]) -> String {
         var out = translated
-        for (token, original) in pairs {
+        for (token, original) in pairs where out.contains(token) {
             out = out.replacingOccurrences(of: token, with: original)
         }
         return out

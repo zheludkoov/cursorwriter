@@ -52,6 +52,17 @@ struct ReferencePlaceholderCodecTests {
         #expect(missing == ["⟦REF_0001⟧"])
     }
 
+    @Test("restoreReplacingPresentOnly substitutes only tokens still in the text")
+    func partialRestore() {
+        let pairs: [(token: String, original: String)] = [
+            ("⟦REF_0001⟧", "@a/b"),
+            ("⟦REF_0002⟧", "@c/d"),
+        ]
+        let translated = "See ⟦REF_0001⟧ only."
+        let out = ReferencePlaceholderCodec.restoreReplacingPresentOnly(translated: translated, pairs: pairs)
+        #expect(out == "See @a/b only.")
+    }
+
     @Test("Russian text with only Cursor path refs")
     func russianWithCursorRefs() throws {
         let input = "Смотри @ai_context/x.md и план @/Users/u/plan.md — важно."

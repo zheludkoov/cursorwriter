@@ -4,6 +4,8 @@ import OSLog
 
 public enum TranslationRunOutcome: Sendable {
     case completed
+    /// Clipboard was written; at least one `⟦REF_####⟧` token was absent from the model output so those paths were not restored.
+    case completedWithMissingReferences
     case failed(String)
     case abortedConcurrent
 }
@@ -81,45 +83,24 @@ public final class TranslationRunner {
         let system = UserSettings.systemPrompt
 
         do {
-            var output = try await client.chatCompletion(system: system, user: masked)
+            let output = try await client.chatCompletion(system: system, user: masked)
             let missing = ReferencePlaceholderCodec.missingPlaceholderTokens(in: output, pairs: pairs)
-            if !missing.isEmpty {
-                AppLog.general.warning("Missing placeholders after first pass; attempting one repair call.")
-                output = try await repairMissingOutput(
-                    output: output,
-                    missing: missing,
-                    pairs: pairs,
-                    client: client
-                )
+            let finalText: String
+            let outcome: TranslationRunOutcome
+            if missing.isEmpty {
+                finalText = try ReferencePlaceholderCodec.restore(translated: output, pairs: pairs)
+                outcome = .completed
+            } else {
+                AppLog.general.warning("Missing placeholders after translation; copying partial result without repair. Missing: \(missing.joined(separator: ", "), privacy: .public)")
+                finalText = ReferencePlaceholderCodec.restoreReplacingPresentOnly(translated: output, pairs: pairs)
+                outcome = .completedWithMissingReferences
             }
-            let finalText = try ReferencePlaceholderCodec.restore(translated: output, pairs: pairs)
 
             pb.clearContents()
             pb.setString(finalText, forType: .string)
-            return .completed
+            return outcome
         } catch {
             return .failed(error.localizedDescription)
         }
-    }
-
-    private func repairMissingOutput(
-        output: String,
-        missing: [String],
-        pairs: [(token: String, original: String)],
-        client: GrokClient
-    ) async throws -> String {
-        let mapLines = pairs.map { "\($0.token) => \($0.original)" }.joined(separator: "\n")
-        let user = """
-        The following REFERENCE TOKENS must appear verbatim in the translated text but are MISSING from your draft:
-        \(missing.joined(separator: ", "))
-
-        Canonical mapping (token to original — copy tokens exactly, do not translate them):
-        \(mapLines)
-
-        Your previous draft (output ONLY the corrected full translation, no explanations):
-        \(output)
-        """
-        let repairSystem = "Restore every ⟦REF_####⟧ token exactly as listed. Output only the corrected full text."
-        return try await client.chatCompletion(system: repairSystem, user: user)
     }
 }
