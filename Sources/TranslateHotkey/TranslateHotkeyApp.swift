@@ -39,10 +39,8 @@ struct TranslateHotkeyApp: App {
         case .idle:
             Image(systemName: "doc.on.clipboard")
         case .working:
-            TimelineView(.animation(minimumInterval: 0.05, paused: false)) { context in
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .rotationEffect(.degrees(context.date.timeIntervalSinceReferenceDate * 240))
-            }
+            // Static icon: time-driven `TimelineView` in a MenuBarExtra label can starve `main` and deadlock clipboard prep.
+            Image(systemName: "arrow.triangle.2.circlepath")
         case .success:
             Image(systemName: "checkmark.circle.fill")
                 .symbolRenderingMode(.multicolor)
